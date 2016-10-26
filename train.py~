@@ -20,15 +20,14 @@ from tensorflow.python.client import timeline
 from wavenet import WaveNetModel, AudioReader, optimizer_factory
 
 BATCH_SIZE = 1
-DATA_DIRECTORY = './input'
-OUT_DATA_DIRECTORY = './output'
+DATA_DIRECTORY = './VCTK-Corpus'
 LOGDIR_ROOT = './logdir'
 CHECKPOINT_EVERY = 50
 NUM_STEPS = int(1e5)
 LEARNING_RATE = 1e-3
 WAVENET_PARAMS = './wavenet_params.json'
 STARTED_DATESTRING = "{0:%Y-%m-%dT%H-%M-%S}".format(datetime.now())
-SAMPLE_SIZE = 10000
+SAMPLE_SIZE = 100000
 L2_REGULARIZATION_STRENGTH = 0
 SILENCE_THRESHOLD = 0.3
 EPSILON = 0.001
@@ -41,8 +40,6 @@ def get_arguments():
                         help='How many wav files to process at once.')
     parser.add_argument('--data_dir', type=str, default=DATA_DIRECTORY,
                         help='The directory containing the VCTK corpus.')
-    parser.add_argument('--data_out_dir', type=str, default=OUT_DATA_DIRECTORY,
-                        help='output data')
     parser.add_argument('--store_metadata', type=bool, default=False,
                         help='Whether to store advanced debugging information '
                         '(execution time, memory consumption) for use with '
@@ -203,13 +200,11 @@ def main():
                                                       EPSILON else None
         reader = AudioReader(
             args.data_dir,
-            args.data_out_dir,
             coord,
             sample_rate=wavenet_params['sample_rate'],
             sample_size=args.sample_size,
             silence_threshold=args.silence_threshold)
         audio_batch = reader.dequeue(args.batch_size)
-        print(audio_batch)
 
     # Create network.
     net = WaveNetModel(
@@ -225,7 +220,7 @@ def main():
         initial_filter_width=wavenet_params["initial_filter_width"])
     if args.l2_regularization_strength == 0:
         args.l2_regularization_strength = None
-    loss = net.loss(audio_batch[0], audio_batch[1], args.l2_regularization_strength)
+    loss = net.loss(audio_batch, args.l2_regularization_strength)
     optimizer = optimizer_factory[args.optimizer](
                     learning_rate=args.learning_rate,
                     momentum=args.momentum)

@@ -55,22 +55,25 @@ class AudioReader(object):
 
     def __init__(self,
                  audio_dir,
+                 audio_output_dir,
                  coord,
                  sample_rate,
                  sample_size=None,
                  silence_threshold=None,
                  queue_size=256):
         self.audio_dir = audio_dir
+        self.audio_output_dir = audio_output_dir
         self.sample_rate = sample_rate
         self.coord = coord
         self.sample_size = sample_size
         self.silence_threshold = silence_threshold
         self.threads = []
         self.sample_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
+        self.output_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
         self.queue = tf.PaddingFIFOQueue(queue_size,
-                                         ['float32'],
-                                         shapes=[(None, 1)])
-        self.enqueue = self.queue.enqueue([self.sample_placeholder])
+                                         ['float32', 'float32'],
+                                         shapes=[(None, 1),(None, 1)])
+        self.enqueue = self.queue.enqueue([self.sample_placeholder, self.output_placeholder])
 
         # TODO Find a better way to check this.
         # Checking inside the AudioReader's thread makes it hard to terminate
@@ -84,17 +87,21 @@ class AudioReader(object):
 
     def thread_main(self, sess):
         buffer_ = np.array([])
+        output_buffer_ = np.array([])
         stop = False
         # Go through the dataset multiple times
         while not stop:
             iterator = load_generic_audio(self.audio_dir, self.sample_rate)
-            for audio, filename in iterator:
+            output_iterator = load_generic_audio(self.audio_output_dir, self.sample_rate)
+            for (audio, filename), (output_audio, output_filename) in zip(iterator, output_iterator):
                 if self.coord.should_stop():
                     stop = True
                     break
                 if self.silence_threshold is not None:
                     # Remove silence
                     audio = trim_silence(audio[:, 0], self.silence_threshold)
+
+                    output_audio = trim_silence(output_audio[:, 0], self.silence_threshold)
                     if audio.size == 0:
                         print("Warning: {} was ignored as it contains only "
                               "silence. Consider decreasing trim_silence "
@@ -104,12 +111,14 @@ class AudioReader(object):
                 if self.sample_size:
                     # Cut samples into fixed size pieces
                     buffer_ = np.append(buffer_, audio)
+                    output_buffer_ = np.append(output_buffer_, output_audio)
                     while len(buffer_) > self.sample_size:
                         piece = np.reshape(buffer_[:self.sample_size], [-1, 1])
-                        print(piece.shape)
+                        output_piece = np.reshape(output_buffer_[:self.sample_size], [-1, 1])
                         sess.run(self.enqueue,
-                                 feed_dict={self.sample_placeholder: piece})
+                                 feed_dict={self.sample_placeholder: piece, self.output_placeholder: output_piece})
                         buffer_ = buffer_[self.sample_size:]
+                        output_buffer_ = output_buffer_[self.sample_size:]
                 else:
                     sess.run(self.enqueue,
                              feed_dict={self.sample_placeholder: audio})

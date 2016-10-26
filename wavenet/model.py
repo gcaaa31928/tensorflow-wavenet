@@ -463,6 +463,7 @@ class WaveNetModel(object):
 
     def loss(self,
              input_batch,
+             output_batch,
              l2_regularization_strength=None,
              name='wavenet'):
         '''Creates a WaveNet network and returns the autoencoding loss.
@@ -473,8 +474,11 @@ class WaveNetModel(object):
             # We mu-law encode and quantize the input audioform.
             input_batch = mu_law_encode(input_batch,
                                         self.quantization_channels)
+            output_batch = mu_law_encode(output_batch,
+                                        self.quantization_channels)
 
             encoded = self._one_hot(input_batch)
+            output_encoded = self._one_hot(output_batch)
             if self.scalar_input:
                 network_input = tf.reshape(
                     tf.cast(input_batch, tf.float32),
@@ -487,8 +491,12 @@ class WaveNetModel(object):
             with tf.name_scope('loss'):
                 # Shift original input left by one sample, which means that
                 # each output sample has to predict the next input sample.
-                shifted = tf.slice(encoded, [0, 1, 0],
-                                   [-1, tf.shape(encoded)[1] - 1, -1])
+                # shifted = tf.slice(encoded, [0, 1, 0],
+                #                    [-1, tf.shape(encoded)[1] - 1, -1])
+                # shifted = tf.pad(shifted, [[0, 0], [0, 1], [0, 0]])
+
+                shifted = tf.slice(output_encoded, [0, 1, 0],
+                                   [-1, tf.shape(output_encoded)[1] - 1, -1])
                 shifted = tf.pad(shifted, [[0, 0], [0, 1], [0, 0]])
 
                 prediction = tf.reshape(raw_output,
