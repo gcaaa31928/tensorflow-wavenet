@@ -28,7 +28,7 @@ NUM_STEPS = int(1e5)
 LEARNING_RATE = 1e-3
 WAVENET_PARAMS = './wavenet_params.json'
 STARTED_DATESTRING = "{0:%Y-%m-%dT%H-%M-%S}".format(datetime.now())
-SAMPLE_SIZE = 10000
+SAMPLE_SIZE = 5000
 L2_REGULARIZATION_STRENGTH = 0
 SILENCE_THRESHOLD = 0.3
 EPSILON = 0.001
@@ -219,7 +219,6 @@ def main():
             sample_size=args.sample_size,
             silence_threshold=args.silence_threshold)
         audio_batch = reader.dequeue(args.batch_size)
-        print(audio_batch)
 
     # Create network.
     net = WaveNetModel(

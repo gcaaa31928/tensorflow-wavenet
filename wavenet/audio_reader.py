@@ -72,7 +72,7 @@ class AudioReader(object):
         self.output_placeholder = tf.placeholder(dtype=tf.float32, shape=None)
         self.queue = tf.PaddingFIFOQueue(queue_size,
                                          ['float32', 'float32'],
-                                         shapes=[(None, 1),(None, 1)])
+                                         shapes=[(None, 1), (None, 1)])
         self.enqueue = self.queue.enqueue([self.sample_placeholder, self.output_placeholder])
 
         # TODO Find a better way to check this.
