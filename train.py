@@ -23,7 +23,7 @@ BATCH_SIZE = 1
 DATA_DIRECTORY = './input'
 OUT_DATA_DIRECTORY = './output'
 LOGDIR_ROOT = './logdir'
-CHECKPOINT_EVERY = 50
+CHECKPOINT_EVERY = 200
 NUM_STEPS = int(1e5)
 LEARNING_RATE = 1e-3
 WAVENET_PARAMS = './wavenet_params.json'
@@ -97,7 +97,7 @@ def get_arguments():
                         default=MOMENTUM, help='Specify the momentum to be '
                         'used by sgd or rmsprop optimizer. Ignored by the '
                         'adam optimizer.')
-    parser.add_argument('--histograms', type=_str_to_bool, default=False,
+    parser.add_argument('--histograms', type=_str_to_bool, default=True,
                          help='Whether to store histogram summaries.')
     return parser.parse_args()
 

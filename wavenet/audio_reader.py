@@ -90,38 +90,38 @@ class AudioReader(object):
         output_buffer_ = np.array([])
         stop = False
         # Go through the dataset multiple times
-        while not stop:
-            iterator = load_generic_audio(self.audio_dir, self.sample_rate)
-            output_iterator = load_generic_audio(self.audio_output_dir, self.sample_rate)
-            for (audio, filename), (output_audio, output_filename) in zip(iterator, output_iterator):
-                if self.coord.should_stop():
-                    stop = True
-                    break
-                if self.silence_threshold is not None:
-                    # Remove silence
-                    audio = trim_silence(audio[:, 0], self.silence_threshold)
+        iterator = load_generic_audio(self.audio_dir, self.sample_rate)
+        output_iterator = load_generic_audio(self.audio_output_dir, self.sample_rate)
+        for (audio, filename), (output_audio, output_filename) in zip(iterator, output_iterator):
+            if self.coord.should_stop():
+                stop = True
+                break
+            if self.silence_threshold is not None:
+                # Remove silence
+                audio = trim_silence(audio[:, 0], self.silence_threshold)
 
-                    output_audio = trim_silence(output_audio[:, 0], self.silence_threshold)
-                    if audio.size == 0:
-                        print("Warning: {} was ignored as it contains only "
-                              "silence. Consider decreasing trim_silence "
-                              "threshold, or adjust volume of the audio."
-                              .format(filename))
+                output_audio = trim_silence(output_audio[:, 0], self.silence_threshold)
+                if audio.size == 0:
+                    print("Warning: {} was ignored as it contains only "
+                          "silence. Consider decreasing trim_silence "
+                          "threshold, or adjust volume of the audio."
+                          .format(filename))
 
-                if self.sample_size:
-                    # Cut samples into fixed size pieces
-                    buffer_ = np.append(buffer_, audio)
-                    output_buffer_ = np.append(output_buffer_, output_audio)
-                    while len(buffer_) > self.sample_size:
-                        piece = np.reshape(buffer_[:self.sample_size], [-1, 1])
-                        output_piece = np.reshape(output_buffer_[:self.sample_size], [-1, 1])
-                        sess.run(self.enqueue,
-                                 feed_dict={self.sample_placeholder: piece, self.output_placeholder: output_piece})
-                        buffer_ = buffer_[self.sample_size:]
-                        output_buffer_ = output_buffer_[self.sample_size:]
-                else:
+            if self.sample_size:
+                # Cut samples into fixed size pieces
+                buffer_ = np.append(buffer_, audio)
+                output_buffer_ = np.append(output_buffer_, output_audio)
+                while len(buffer_) > self.sample_size:
+                    piece = np.reshape(buffer_[:self.sample_size], [-1, 1])
+                    output_piece = np.reshape(output_buffer_[:self.sample_size], [-1, 1])
                     sess.run(self.enqueue,
-                             feed_dict={self.sample_placeholder: audio})
+                             feed_dict={self.sample_placeholder: piece, self.output_placeholder: output_piece})
+                    buffer_ = buffer_[1:]
+                    output_buffer_ = output_buffer_[1:]
+            else:
+                sess.run(self.enqueue,
+                         feed_dict={self.sample_placeholder: audio})
+        self.coord.request_stop()
 
     def start_threads(self, sess, n_threads=1):
         for _ in range(n_threads):
