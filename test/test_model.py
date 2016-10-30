@@ -2,6 +2,8 @@
 
 import json
 
+import librosa
+import matplotlib.pyplot as plt
 import numpy as np
 import sys
 import tensorflow as tf
@@ -12,7 +14,7 @@ from wavenet import (WaveNetModel, time_to_batch, batch_to_time, causal_conv,
                      optimizer_factory, mu_law_decode)
 
 SAMPLE_RATE_HZ = 2000.0  # Hz
-TRAIN_ITERATIONS = 400
+TRAIN_ITERATIONS = 1000
 SAMPLE_DURATION = 0.5  # Seconds
 SAMPLE_PERIOD_SECS = 1.0 / SAMPLE_RATE_HZ
 MOMENTUM = 0.95
@@ -27,7 +29,7 @@ F3 = 233.08  # B-flat frequency in hz
 def make_sine_waves():
     """Creates a time-series of audio amplitudes corresponding to 3
     superimposed sine waves."""
-    sample_period = 1.0/SAMPLE_RATE_HZ
+    sample_period = 1.0 / SAMPLE_RATE_HZ
     times = np.arange(0.0, SAMPLE_DURATION, sample_period)
 
     amplitudes = (np.sin(times * 2.0 * np.pi * F1) / 3.0 +
@@ -62,7 +64,7 @@ def generate_waveform(sess, net, fast_generation):
         # Run the WaveNet to predict the next sample.
         prediction = sess.run(operations, feed_dict={samples: window})[0]
         sample = np.random.choice(
-           np.arange(QUANTIZATION_CHANNELS), p=prediction)
+            np.arange(QUANTIZATION_CHANNELS), p=prediction)
         waveform.append(sample)
         # print("Generated {} of {}: {}".format(i, GENERATE_SAMPLES, sample))
         # sys.stdout.flush()
@@ -81,10 +83,10 @@ def find_nearest(freqs, power_spectrum, frequency):
 
 
 def check_waveform(assertion, generated_waveform):
-    # librosa.output.write_wav('/tmp/sine_test.wav',
-    #                          generated_waveform,
-    #                          SAMPLE_RATE_HZ)
-    power_spectrum = np.abs(np.fft.fft(generated_waveform))**2
+    librosa.output.write_wav('sine_test.wav',
+                             generated_waveform,
+                             int(SAMPLE_RATE_HZ))
+    power_spectrum = np.abs(np.fft.fft(generated_waveform)) ** 2
     freqs = np.fft.fftfreq(generated_waveform.size, SAMPLE_PERIOD_SECS)
     indices = np.argsort(freqs)
     indices = [index for index in indices if freqs[index] >= 0 and
@@ -118,7 +120,7 @@ class TestNet(tf.test.TestCase):
                                 skip_channels=32)
         self.optimizer_type = 'sgd'
         self.learning_rate = 0.02
-        self.generate = False
+        self.generate = True
         self.momentum = MOMENTUM
 
     # Train a net on a short clip of 3 sine waves superimposed
@@ -130,11 +132,14 @@ class TestNet(tf.test.TestCase):
 
     def testEndToEndTraining(self):
         audio = make_sine_waves()
+        output_audio = make_sine_waves()
+        # plt.plot(audio)
+        # plt.plot(output_audio)
+        # plt.show()
         np.random.seed(42)
-
+        librosa.output.write_wav('sine_train.wav', audio, int(SAMPLE_RATE_HZ))
         # if self.generate:
-        #    librosa.output.write_wav('/tmp/sine_train.wav', audio,
-        #                             SAMPLE_RATE_HZ)
+        #
         #    power_spectrum = np.abs(np.fft.fft(audio))**2
         #    freqs = np.fft.fftfreq(audio.size, SAMPLE_PERIOD_SECS)
         #    indices = np.argsort(freqs)
@@ -144,9 +149,10 @@ class TestNet(tf.test.TestCase):
         #    plt.show()
 
         audio_tensor = tf.convert_to_tensor(audio, dtype=tf.float32)
-        loss = self.net.loss(audio_tensor)
+        output_audio_tensor = tf.convert_to_tensor(output_audio, dtype=tf.float32)
+        loss = self.net.loss(audio_tensor, output_audio_tensor)
         optimizer = optimizer_factory[self.optimizer_type](
-                      learning_rate=self.learning_rate, momentum=self.momentum)
+            learning_rate=self.learning_rate, momentum=self.momentum)
         trainable = tf.trainable_variables()
         optim = optimizer.minimize(loss, var_list=trainable)
         init = tf.initialize_all_variables()
@@ -160,8 +166,8 @@ class TestNet(tf.test.TestCase):
             initial_loss = sess.run(loss)
             for i in range(TRAIN_ITERATIONS):
                 loss_val, _ = sess.run([loss, optim])
-                # if i % 10 == 0:
-                #     print("i: %d loss: %f" % (i, loss_val))
+                if i % 10 == 0:
+                    print("i: %d loss: %f" % (i, loss_val))
 
             # Sanity check the initial loss was larger.
             self.assertGreater(initial_loss, max_allowed_loss)
@@ -177,16 +183,17 @@ class TestNet(tf.test.TestCase):
             # saver.save(sess, '/tmp/sine_test_model.ckpt', global_step=i)
             if self.generate:
                 # Check non-incremental generation
-                generated_waveform = generate_waveform(sess, self.net, False)
-                check_waveform(self.assertGreater, generated_waveform)
+                # generated_waveform = generate_waveform(sess, self.net, False)
+                # check_waveform(self.assertGreater, generated_waveform)
 
                 # Check incremental generation
                 generated_waveform = generate_waveform(sess, self.net, True)
+                plt.plot(generated_waveform)
+                plt.show()
                 check_waveform(self.assertGreater, generated_waveform)
 
 
 class TestNetWithBiases(TestNet):
-
     def setUp(self):
         self.net = WaveNetModel(batch_size=1,
                                 dilations=[1, 2, 4, 8, 16, 32, 64,
@@ -204,7 +211,6 @@ class TestNetWithBiases(TestNet):
 
 
 class TestNetWithRMSProp(TestNet):
-
     def setUp(self):
         self.net = WaveNetModel(batch_size=1,
                                 dilations=[1, 2, 4, 8, 16, 32, 64,
@@ -221,7 +227,6 @@ class TestNetWithRMSProp(TestNet):
 
 
 class TestNetWithScalarInput(TestNet):
-
     def setUp(self):
         self.net = WaveNetModel(batch_size=1,
                                 dilations=[1, 2, 4, 8, 16, 32, 64,

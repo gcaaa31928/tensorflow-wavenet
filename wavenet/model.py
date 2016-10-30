@@ -481,7 +481,7 @@ class WaveNetModel(object):
             input_batch = mu_law_encode(input_batch,
                                         self.quantization_channels)
             output_batch = mu_law_encode(output_batch,
-                                        self.quantization_channels)
+                                         self.quantization_channels)
 
             encoded = self._one_hot(input_batch)
             output_encoded = self._one_hot(output_batch)
