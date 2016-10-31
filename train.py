@@ -277,7 +277,7 @@ def main():
         last_saved_step = saved_global_step
         for step in range(saved_global_step + 1, args.num_steps):
             start_time = time.time()
-            if args.store_metadata and step % 50 == 0:
+            if args.store_metadata and step % 1 == 0:
                 # Slow run that stores extra information for debugging.
                 print('Storing metadata')
                 run_options = tf.RunOptions(
