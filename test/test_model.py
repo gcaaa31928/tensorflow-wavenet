@@ -12,6 +12,7 @@ import tensorflow as tf
 
 from wavenet import (WaveNetModel, time_to_batch, batch_to_time, causal_conv,
                      optimizer_factory, mu_law_decode)
+from wavenet.model import create_variable
 
 SAMPLE_RATE_HZ = 2000.0  # Hz
 TRAIN_ITERATIONS = 1000
@@ -106,6 +107,20 @@ def check_waveform(assertion, generated_waveform):
     # Expect most of the power to be at the 3 frequencies we trained
     # on.
     assertion(expected_power, 0.9 * power_sum)
+
+
+class TestSeed(tf.test.TestCase):
+
+    def testVariableSeed(self):
+        tensor = create_variable(
+            'test',
+            [2, 2, 2])
+        init = tf.initialize_all_variables()
+        with self.test_session() as sess:
+            sess.run(init)
+            matrix = sess.run(tensor)
+            self.assertAlmostEqual(-0.45200047, matrix[0][0][0])
+            self.assertAlmostEqual(0.72815341, matrix[0][0][1])
 
 
 class TestNet(tf.test.TestCase):

@@ -78,7 +78,7 @@ def get_arguments():
     parser.add_argument(
         '--fast_generation',
         type=_str_to_bool,
-        default=True,
+        default=False,
         help='Use fast generation')
     parser.add_argument(
         '--wav_seed',

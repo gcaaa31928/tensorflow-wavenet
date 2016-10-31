@@ -6,7 +6,7 @@ from .ops import causal_conv, mu_law_encode
 def create_variable(name, shape):
     '''Create a convolution filter variable with the specified name and shape,
     and initialize it using Xavier initialition.'''
-    initializer = tf.contrib.layers.xavier_initializer_conv2d()
+    initializer = tf.contrib.layers.xavier_initializer_conv2d(seed=1)
     variable = tf.Variable(initializer(shape=shape), name=name)
     return variable
 
