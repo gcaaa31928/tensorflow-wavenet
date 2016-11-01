@@ -15,7 +15,7 @@ from wavenet import (WaveNetModel, time_to_batch, batch_to_time, causal_conv,
 from wavenet.model import create_variable
 
 SAMPLE_RATE_HZ = 2000.0  # Hz
-TRAIN_ITERATIONS = 2000
+TRAIN_ITERATIONS = 1000
 SAMPLE_DURATION = 0.5  # Seconds
 SAMPLE_PERIOD_SECS = 1.0 / SAMPLE_RATE_HZ
 MOMENTUM = 0.95
@@ -26,9 +26,9 @@ WINDOW_SIZE = 1000
 F1 = 155.56  # E-flat frequency in hz
 F2 = 196.00  # G frequency in hz
 F3 = 233.08  # B-flat frequency in hz
-F4 = 1760.00  # D#4/Eb4
-F5 = 2093.00  # F#4/Gb4
-F6 = 2489.02  # A4
+F4 = 500.00  # D#4/Eb4
+F5 = 600.00  # F#4/Gb4
+F6 = 700.02  # A4
 
 
 def make_sine_waves():
@@ -64,7 +64,8 @@ def generate_waveform(sess, net, fast_generation, wav_seed=False):
         seed = create_seed("sine_train.wav",
                            SAMPLE_RATE_HZ,
                            QUANTIZATION_CHANNELS,
-                           window_size=WINDOW_SIZE)
+                           window_size=WINDOW_SIZE,
+                           silence_threshold=0)
         input_waveform = sess.run(seed).tolist()
     decode = mu_law_decode(samples, QUANTIZATION_CHANNELS)
     for i in range(GENERATE_SAMPLES):
@@ -79,17 +80,21 @@ def generate_waveform(sess, net, fast_generation, wav_seed=False):
             else:
                 window = waveform
             if wav_seed:
+                if i >= len(input_waveform):
+                    break
                 if i - 256 >= 0:
-                    window = input_waveform[i - 256:]
+                    f_window = input_waveform[i - 256:i]
+
                 else:
-                    window = input_waveform[0:i]
-                if len(window) == 0:
-                    print(i)
+                    f_window = input_waveform[:i]
+                    print(f_window)
+                    print(waveform)
+                if len(f_window) == 0:
                     continue
-                # print(window)
+                    # print(window)
 
         # Run the WaveNet to predict the next sample.
-        prediction = sess.run(operations, feed_dict={samples: window})[0]
+        prediction = sess.run(operations, feed_dict={samples: f_window})[0]
         sample = np.random.choice(
             np.arange(QUANTIZATION_CHANNELS), p=prediction)
         waveform.append(sample)
@@ -136,7 +141,6 @@ def check_waveform(assertion, generated_waveform):
 
 
 class TestSeed(tf.test.TestCase):
-
     def testVariableSeed(self):
         tensor = create_variable(
             'test',
@@ -158,6 +162,7 @@ class TestNet(tf.test.TestCase):
                                 residual_channels=32,
                                 dilation_channels=32,
                                 quantization_channels=256,
+                                use_biases=True,
                                 skip_channels=32)
         self.optimizer_type = 'sgd'
         self.learning_rate = 0.02
@@ -191,7 +196,7 @@ class TestNet(tf.test.TestCase):
 
         audio_tensor = tf.convert_to_tensor(audio, dtype=tf.float32)
         output_audio_tensor = tf.convert_to_tensor(output_audio, dtype=tf.float32)
-        loss = self.net.loss(audio_tensor, output_audio_tensor)
+        loss = self.net.loss(audio_tensor, audio_tensor)
         optimizer = optimizer_factory[self.optimizer_type](
             learning_rate=self.learning_rate, momentum=self.momentum)
         trainable = tf.trainable_variables()

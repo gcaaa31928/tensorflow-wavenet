@@ -100,7 +100,7 @@ def create_seed(filename,
                 window_size=WINDOW,
                 silence_threshold=SILENCE_THRESHOLD):
     audio, _ = librosa.load(filename, sr=sample_rate, mono=True)
-    audio = audio_reader.trim_silence(audio, silence_threshold)
+    # audio = audio_reader.trim_silence(audio, silence_threshold)
 
     quantized = mu_law_encode(audio, quantization_channels)
     cut_index = tf.cond(tf.size(quantized) < tf.constant(window_size),

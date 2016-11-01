@@ -487,7 +487,7 @@ class WaveNetModel(object):
             output_encoded = self._one_hot(output_batch)
             if self.scalar_input:
                 network_input = tf.reshape(
-                    tf.cast(input_batch, tf.float32),
+                    tf.cast(input_batch, tf.float64),
                     [self.batch_size, -1, 1])
             else:
                 network_input = encoded
@@ -500,7 +500,7 @@ class WaveNetModel(object):
                 # shifted = tf.slice(encoded, [0, 1, 0],
                 #                    [-1, tf.shape(encoded)[1] - 1, -1])
                 # shifted = tf.pad(shifted, [[0, 0], [0, 1], [0, 0]])
-
+                #
                 shifted = tf.slice(output_encoded, [0, 1, 0],
                                    [-1, tf.shape(output_encoded)[1] - 1, -1])
                 shifted = tf.pad(shifted, [[0, 0], [0, 1], [0, 0]])

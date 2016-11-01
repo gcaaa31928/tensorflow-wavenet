@@ -56,15 +56,23 @@ class TestOwn(tf.test.TestCase):
                            [-1, tf.shape(output_encoded)[1] - 1, -1])
         # shifted = tf.pad(shifted, [[0, 0], [0, 1], [0, 0]])
         raw_output = self.net._create_network(encoded)
-
-        prediction = tf.reshape(raw_output,
-                                [-1, self.net.quantization_channels])
+        out = tf.reshape(raw_output, [-1, self.net.quantization_channels])
+        # Cast to float64 to avoid bug in TensorFlow
+        proba = tf.cast(
+            tf.nn.softmax(tf.cast(out, tf.float64)), tf.float32)
+        last = tf.slice(
+            proba,
+            [tf.shape(proba)[0] - 1, 0],
+            [1, self.net.quantization_channels])
+        lasted = tf.reshape(last, [-1])
         # shifted = tf.pad(shifted, [[0, 0], [0, 1], [0, 0]])
         # slice = tf.reshape(shifted, [-1, self.net.quantization_channels])
         with self.test_session() as sess:
             sess.run(tf.initialize_all_variables())
-            print(sess.run(shifted).shape)
-            print(sess.run(prediction).shape)
+            print(sess.run(out).shape)
+            print(sess.run(proba).shape)
+            print(sess.run(last).shape)
+            print(sess.run(lasted).shape)
 
     def test2(self):
         matrix = [[[1, 1, 1], [2, 2, 2], [3, 3, 3], [4, 4, 4], [5, 5, 5]]]
