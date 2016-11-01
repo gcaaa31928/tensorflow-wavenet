@@ -15,9 +15,9 @@ from wavenet import WaveNetModel, mu_law_decode, mu_law_encode, audio_reader
 SAMPLES = 16000
 TEMPERATURE = 1.0
 LOGDIR = './logdir'
-WINDOW = 8000
+WINDOW = 5000
 WAVENET_PARAMS = './wavenet_params.json'
-SAVE_EVERY = None
+SAVE_EVERY = 50
 SILENCE_THRESHOLD = 0.1
 
 
@@ -156,8 +156,11 @@ def main():
     if args.wav_seed:
         seed = create_seed(args.wav_seed,
                            wavenet_params['sample_rate'],
-                           quantization_channels)
-        waveform = sess.run(seed).tolist()
+                           quantization_channels,
+                           window_size=16000)
+        input_waveform = sess.run(seed).tolist()
+        waveform = []
+        print('waveform seed length from {}'.format(len(input_waveform)))
     else:
         waveform = np.random.randint(quantization_channels, size=(1,)).tolist()
 
@@ -179,16 +182,22 @@ def main():
         print('Done.')
 
     last_sample_timestamp = datetime.now()
-    for step in range(args.samples):
+    for step in range(args.window, args.samples):
         if args.fast_generation:
             outputs = [next_sample]
             outputs.extend(net.push_ops)
             window = waveform[-1]
         else:
-            if len(waveform) > args.window:
-                window = waveform[-args.window:]
+            if step - args.window >= 0:
+                window = input_waveform[step-args.window: step]
             else:
-                window = waveform
+                window = input_waveform[0:step]
+            if len(window) == 0:
+                continue
+            # if len(waveform) > args.window:
+            #     window = waveform[-args.window:]
+            # else:
+            #     window = waveform
             outputs = [next_sample]
 
         # Run the WaveNet to predict the next sample.
@@ -222,6 +231,7 @@ def main():
                 (step + 1) % args.save_every == 0):
             out = sess.run(decode, feed_dict={samples: waveform})
             write_wav(out, wavenet_params['sample_rate'], args.wav_out_path)
+            print("current step is {}".format(step))
 
     # Introduce a newline to clear the carriage return from the progress.
     print()
