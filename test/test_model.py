@@ -15,7 +15,7 @@ from wavenet import (WaveNetModel, time_to_batch, batch_to_time, causal_conv,
 from wavenet.model import create_variable
 
 SAMPLE_RATE_HZ = 2000.0  # Hz
-TRAIN_ITERATIONS = 1000
+TRAIN_ITERATIONS = 2000
 SAMPLE_DURATION = 0.5  # Seconds
 SAMPLE_PERIOD_SECS = 1.0 / SAMPLE_RATE_HZ
 MOMENTUM = 0.95
@@ -80,7 +80,7 @@ def generate_waveform(sess, net, fast_generation, wav_seed=False):
                 window = waveform
             if wav_seed:
                 if i - 256 >= 0:
-                    window = input_waveform[i - 256:i]
+                    window = input_waveform[i - 256:]
                 else:
                     window = input_waveform[0:i]
                 if len(window) == 0:
@@ -191,7 +191,7 @@ class TestNet(tf.test.TestCase):
 
         audio_tensor = tf.convert_to_tensor(audio, dtype=tf.float32)
         output_audio_tensor = tf.convert_to_tensor(output_audio, dtype=tf.float32)
-        loss = self.net.loss(audio_tensor, audio_tensor)
+        loss = self.net.loss(audio_tensor, output_audio_tensor)
         optimizer = optimizer_factory[self.optimizer_type](
             learning_rate=self.learning_rate, momentum=self.momentum)
         trainable = tf.trainable_variables()
@@ -224,7 +224,7 @@ class TestNet(tf.test.TestCase):
             # saver.save(sess, '/tmp/sine_test_model.ckpt', global_step=i)
             if self.generate:
                 # Check non-incremental generation
-                generated_waveform = generate_waveform(sess, self.net, False, wav_seed=False)
+                generated_waveform = generate_waveform(sess, self.net, False, wav_seed=True)
                 check_waveform(self.assertGreater, generated_waveform)
 
                 # Check incremental generation
