@@ -421,6 +421,20 @@ class WaveNetModel(object):
             encoded = tf.reshape(encoded, shape)
         return encoded
 
+    def predict_proba_all(self, waveform, name='wavenet'):
+        with tf.name_scope(name):
+            if self.scalar_input:
+                encoded = tf.cast(waveform, tf.float32)
+                encoded = tf.reshape(encoded, [-1, 1])
+            else:
+                encoded = self._one_hot(waveform)
+            raw_output = self._create_network(encoded)
+            out = tf.reshape(raw_output, [-1, self.quantization_channels])
+            # Cast to float64 to avoid bug in TensorFlow
+            proba = tf.cast(
+                tf.nn.softmax(tf.cast(out, tf.float64)), tf.float32)
+            return proba
+
     def predict_proba(self, waveform, name='wavenet'):
         '''Computes the probability distribution of the next sample based on
         all samples in the input waveform.
@@ -507,6 +521,7 @@ class WaveNetModel(object):
 
                 prediction = tf.reshape(raw_output,
                                         [-1, self.quantization_channels])
+
                 loss = tf.nn.softmax_cross_entropy_with_logits(
                     prediction,
                     tf.reshape(shifted, [-1, self.quantization_channels]))

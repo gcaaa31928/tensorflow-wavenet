@@ -15,7 +15,7 @@ from wavenet import (WaveNetModel, time_to_batch, batch_to_time, causal_conv,
 from wavenet.model import create_variable
 
 SAMPLE_RATE_HZ = 2000.0  # Hz
-TRAIN_ITERATIONS = 1000
+TRAIN_ITERATIONS = 10
 SAMPLE_DURATION = 0.5  # Seconds
 SAMPLE_PERIOD_SECS = 1.0 / SAMPLE_RATE_HZ
 MOMENTUM = 0.95
@@ -47,6 +47,12 @@ def make_sine_waves():
 
     return amplitudes, output_amplitudes
 
+def get_all_output_from_predictions(predictions):
+    pass
+    # for step in len(predictions)
+    # sample = np.random.choice(
+    #     np.arange(QUANTIZATION_CHANNELS), p=prediction)
+
 
 def generate_waveform(sess, net, fast_generation, wav_seed=False):
     samples = tf.placeholder(tf.int32)
@@ -69,7 +75,6 @@ def generate_waveform(sess, net, fast_generation, wav_seed=False):
         input_waveform = sess.run(seed).tolist()
     decode = mu_law_decode(samples, QUANTIZATION_CHANNELS)
     for i in range(GENERATE_SAMPLES):
-        print(i)
         if fast_generation:
             window = waveform[-1]
             if wav_seed and i < len(input_waveform):
@@ -88,13 +93,18 @@ def generate_waveform(sess, net, fast_generation, wav_seed=False):
                 else:
                     f_window = input_waveform[:i]
                     print(f_window)
-                    print(waveform)
+                    print(window)
                 if len(f_window) == 0:
                     continue
                     # print(window)
 
         # Run the WaveNet to predict the next sample.
+        all_prediction = sess.run([net.predict_proba_all(f_window)], feed_dict={samples: f_window})
+        all_prediction = np.asarray(all_prediction)
+        print(all_prediction)
+
         prediction = sess.run(operations, feed_dict={samples: f_window})[0]
+        # print(prediction)
         sample = np.random.choice(
             np.arange(QUANTIZATION_CHANNELS), p=prediction)
         waveform.append(sample)

@@ -70,7 +70,8 @@ class TestOwn(tf.test.TestCase):
         with self.test_session() as sess:
             sess.run(tf.initialize_all_variables())
             print(sess.run(out).shape)
-            print(sess.run(proba).shape)
+            print(sess.run(proba)[1])
+            print(sess.run(proba)[0])
             print(sess.run(last).shape)
             print(sess.run(lasted).shape)
 
