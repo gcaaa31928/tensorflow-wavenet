@@ -433,6 +433,7 @@ class WaveNetModel(object):
             # Cast to float64 to avoid bug in TensorFlow
             proba = tf.cast(
                 tf.nn.softmax(tf.cast(out, tf.float64)), tf.float32)
+
             return proba
 
     def predict_proba(self, waveform, name='wavenet'):
@@ -515,16 +516,16 @@ class WaveNetModel(object):
                 #                    [-1, tf.shape(encoded)[1] - 1, -1])
                 # shifted = tf.pad(shifted, [[0, 0], [0, 1], [0, 0]])
                 #
-                shifted = tf.slice(output_encoded, [0, 1, 0],
-                                   [-1, tf.shape(output_encoded)[1] - 1, -1])
-                shifted = tf.pad(shifted, [[0, 0], [0, 1], [0, 0]])
+                # shifted = tf.slice(output_encoded, [0, 1, 0],
+                #                    [-1, tf.shape(output_encoded)[1] - 1, -1])
+                # shifted = tf.pad(shifted, [[0, 0], [0, 1], [0, 0]])
 
                 prediction = tf.reshape(raw_output,
                                         [-1, self.quantization_channels])
 
                 loss = tf.nn.softmax_cross_entropy_with_logits(
                     prediction,
-                    tf.reshape(shifted, [-1, self.quantization_channels]))
+                    tf.reshape(output_encoded, [-1, self.quantization_channels]))
                 reduced_loss = tf.reduce_mean(loss)
 
                 tf.scalar_summary('loss', reduced_loss)
