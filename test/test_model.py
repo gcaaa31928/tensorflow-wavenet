@@ -174,6 +174,7 @@ class TestSeed(tf.test.TestCase):
 
 
 class TestMoveNet(tf.test.TestCase):
+
     def setUp(self):
         self.net = WaveNetModel(batch_size=1,
                                 dilations=[1, 2, 4, 8, 16, 32, 64,
@@ -208,12 +209,16 @@ class TestMoveNet(tf.test.TestCase):
         generated_waveform = None
         max_allowed_loss = 0.1
         slide_windows = 256
-
+        slide_start = 0
         with self.test_session() as sess:
+            sess.run(init)
             for i in range(TRAIN_ITERATIONS):
-                length = min(len(audio), i + slide_windows)
-                input_audio_window = audio[i:length]
-                output_audio_window = output_audio[i:length]
+                if slide_start + slide_windows >= min(len(audio), len(output_audio)):
+                    slide_start = 0
+                    print("slide from beginning...")
+                input_audio_window = audio[slide_start:slide_start + slide_windows]
+                output_audio_window = output_audio[slide_start:slide_start + slide_windows]
+                slide_start += 1
                 loss_val, _ = sess.run([loss, optim], feed_dict={input_samples: input_audio_window,
                                                                  output_samples: output_audio_window})
                 if i % 10 == 0:
