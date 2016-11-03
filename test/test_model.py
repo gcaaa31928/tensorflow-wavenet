@@ -18,7 +18,7 @@ from wavenet import (WaveNetModel, time_to_batch, batch_to_time, causal_conv,
 from wavenet.model import create_variable
 
 SAMPLE_RATE_HZ = 2000.0  # Hz
-TRAIN_ITERATIONS = 20000
+TRAIN_ITERATIONS = 6000
 SAMPLE_DURATION = 0.5  # Seconds
 SAMPLE_PERIOD_SECS = 1.0 / SAMPLE_RATE_HZ
 MOMENTUM = 0.95
@@ -175,6 +175,37 @@ class TestSeed(tf.test.TestCase):
 
 class TestMoveNet(tf.test.TestCase):
 
+    def generate_waveform(self, sess):
+        samples = tf.placeholder(tf.int32)
+        next_sample_probs = self.net.predict_proba_all(samples)
+        operations = [next_sample_probs]
+
+        waveform = []
+        seed = create_seed("sine_train.wav",
+                           SAMPLE_RATE_HZ,
+                           QUANTIZATION_CHANNELS,
+                           window_size=WINDOW_SIZE,
+                           silence_threshold=0)
+        input_waveform = sess.run(seed).tolist()
+        decode = mu_law_decode(samples, QUANTIZATION_CHANNELS)
+        slide_windows = 256
+        for slide_start in range(0, len(input_waveform), slide_windows):
+            if slide_start + slide_windows >= len(input_waveform):
+                slide_start = 0
+                print("slide from beginning...")
+            input_audio_window = input_waveform[slide_start:slide_start + slide_windows]
+
+            # Run the WaveNet to predict the next sample.
+            all_prediction = sess.run(operations, feed_dict={samples: input_audio_window})[0]
+            all_prediction = np.asarray(all_prediction)
+            output_waveform = get_all_output_from_predictions(all_prediction)
+            print("Prediction {}".format(output_waveform))
+            waveform.extend(output_waveform)
+
+        waveform = np.array(waveform[:])
+        decoded_waveform = sess.run(decode, feed_dict={samples: waveform})
+        return decoded_waveform
+
     def setUp(self):
         self.net = WaveNetModel(batch_size=1,
                                 dilations=[1, 2, 4, 8, 16, 32, 64,
@@ -226,14 +257,10 @@ class TestMoveNet(tf.test.TestCase):
             # saver.save(sess, '/tmp/sine_test_model.ckpt', global_step=i)
             if self.generate:
                 # Check non-incremental generation
-                generated_waveform = generate_waveform(sess, self.net, False, wav_seed=True)
+                generated_waveform = self.generate_waveform(sess)
                 check_waveform(self.assertGreater, generated_waveform)
 
-                # Check incremental generation
-                # generated_waveform = generate_waveform(sess, self.net, True, wav_seed=True)
-                # plt.plot(generated_waveform)
-                # plt.show()
-                # check_waveform(self.assertGreater, generated_waveform)
+
 
 
 class TestNet(tf.test.TestCase):
