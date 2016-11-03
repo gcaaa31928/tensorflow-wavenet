@@ -1,6 +1,7 @@
 """Unit tests for the WaveNet that check that it can train on audio data."""
 
 import json
+import os
 
 import librosa
 import matplotlib.pyplot as plt
@@ -9,13 +10,15 @@ import sys
 import tensorflow as tf
 # import matplotlib.pyplot as plt
 # import librosa
+from tensorflow.python.client import timeline
+
 from generate import create_seed
 from wavenet import (WaveNetModel, time_to_batch, batch_to_time, causal_conv,
                      optimizer_factory, mu_law_decode)
 from wavenet.model import create_variable
 
 SAMPLE_RATE_HZ = 2000.0  # Hz
-TRAIN_ITERATIONS = 10
+TRAIN_ITERATIONS = 20000
 SAMPLE_DURATION = 0.5  # Seconds
 SAMPLE_PERIOD_SECS = 1.0 / SAMPLE_RATE_HZ
 MOMENTUM = 0.95
@@ -49,10 +52,12 @@ def make_sine_waves():
 
 
 def get_all_output_from_predictions(predictions):
-    pass
-    # for step in len(predictions)
-    # sample = np.random.choice(
-    #     np.arange(QUANTIZATION_CHANNELS), p=prediction)
+    samples = []
+    for predit in predictions:
+        sample = np.random.choice(
+            np.arange(QUANTIZATION_CHANNELS), p=predit)
+        samples.append(sample)
+    return samples
 
 
 def generate_waveform(sess, net, fast_generation, wav_seed=False):
@@ -76,6 +81,7 @@ def generate_waveform(sess, net, fast_generation, wav_seed=False):
         input_waveform = sess.run(seed).tolist()
     decode = mu_law_decode(samples, QUANTIZATION_CHANNELS)
     for i in range(GENERATE_SAMPLES):
+        print("=====================================================")
         if fast_generation:
             window = waveform[-1]
             if wav_seed and i < len(input_waveform):
@@ -93,22 +99,25 @@ def generate_waveform(sess, net, fast_generation, wav_seed=False):
 
                 else:
                     f_window = input_waveform[:i]
-                    print(f_window)
-                    print(window)
+                    print("Input {}".format(f_window))
+                    # print(window)
                 if len(f_window) == 0:
                     continue
                     # print(window)
 
         # Run the WaveNet to predict the next sample.
-        all_prediction = sess.run([net.predict_proba_all(f_window)], feed_dict={samples: f_window})
+        all_prediction = sess.run([net.predict_proba_all(samples)], feed_dict={samples: input_waveform})[0]
         all_prediction = np.asarray(all_prediction)
-        print(all_prediction)
+        output_waveform = get_all_output_from_predictions(all_prediction)
+        print("Prediction {}".format(output_waveform))
+        decoded_waveform = sess.run(decode, feed_dict={samples: output_waveform})
+        return decoded_waveform
+        # prediction = sess.run(operations, feed_dict={samples: f_window})[0]
+        # sample = np.random.choice(
+        #     np.arange(QUANTIZATION_CHANNELS), p=prediction)
+        # waveform.append(sample)
 
-        prediction = sess.run(operations, feed_dict={samples: f_window})[0]
-        # print(prediction)
-        sample = np.random.choice(
-            np.arange(QUANTIZATION_CHANNELS), p=prediction)
-        waveform.append(sample)
+
         # print("Generated {} of {}: {}".format(i, GENERATE_SAMPLES, sample))
         # sys.stdout.flush()
 
@@ -259,16 +268,18 @@ class TestNet(tf.test.TestCase):
         #                                             freqs[index] <= 500.0]
         #    plt.plot(freqs[indices], power_spectrum[indices])
         #    plt.show()
+        run_metadata = tf.RunMetadata()
 
         audio_tensor = tf.convert_to_tensor(audio, dtype=tf.float32)
         output_audio_tensor = tf.convert_to_tensor(output_audio, dtype=tf.float32)
-        loss = self.net.loss(audio_tensor, audio_tensor)
+        loss = self.net.loss(audio_tensor, output_audio_tensor)
         optimizer = optimizer_factory[self.optimizer_type](
             learning_rate=self.learning_rate, momentum=self.momentum)
         trainable = tf.trainable_variables()
         optim = optimizer.minimize(loss, var_list=trainable)
         init = tf.initialize_all_variables()
-
+        run_options = tf.RunOptions(
+            trace_level=tf.RunOptions.FULL_TRACE)
         generated_waveform = None
         max_allowed_loss = 0.1
         loss_val = max_allowed_loss
@@ -277,9 +288,13 @@ class TestNet(tf.test.TestCase):
             sess.run(init)
             initial_loss = sess.run(loss)
             for i in range(TRAIN_ITERATIONS):
-                loss_val, _ = sess.run([loss, optim])
+                loss_val, _ = sess.run([loss, optim], run_metadata=run_metadata)
                 if i % 10 == 0:
                     print("i: %d loss: %f" % (i, loss_val))
+                    tl = timeline.Timeline(run_metadata.step_stats)
+                    timeline_path = os.path.join('.', 'timeline.trace')
+                    # with open(timeline_path, 'w') as f:
+                    #     f.write(tl.generate_chrome_trace_format(show_memory=True))
 
             # Sanity check the initial loss was larger.
             # self.assertGreater(initial_loss, max_allowed_loss)
