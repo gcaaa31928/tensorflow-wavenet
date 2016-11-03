@@ -47,6 +47,7 @@ def make_sine_waves():
 
     return amplitudes, output_amplitudes
 
+
 def get_all_output_from_predictions(predictions):
     pass
     # for step in len(predictions)
@@ -163,6 +164,64 @@ class TestSeed(tf.test.TestCase):
             self.assertAlmostEqual(0.72815341, matrix[0][0][1])
 
 
+class TestMoveNet(tf.test.TestCase):
+    def setUp(self):
+        self.net = WaveNetModel(batch_size=1,
+                                dilations=[1, 2, 4, 8, 16, 32, 64,
+                                           1, 2, 4, 8, 16, 32, 64],
+                                filter_width=2,
+                                residual_channels=32,
+                                dilation_channels=32,
+                                quantization_channels=256,
+                                use_biases=True,
+                                skip_channels=32)
+        self.optimizer_type = 'sgd'
+        self.learning_rate = 0.02
+        self.generate = True
+        self.momentum = MOMENTUM
+
+    def testEndToEndTraining(self):
+        audio, output_audio = make_sine_waves()
+        np.random.seed(42)
+        librosa.output.write_wav('sine_train.wav', audio, int(SAMPLE_RATE_HZ))
+        librosa.output.write_wav('sine_expected_answered.wav', output_audio, int(SAMPLE_RATE_HZ))
+
+        input_samples = tf.placeholder(tf.float32)
+        output_samples = tf.placeholder(tf.float32)
+
+        loss = self.net.loss(input_samples, output_samples)
+        optimizer = optimizer_factory[self.optimizer_type](
+            learning_rate=self.learning_rate, momentum=self.momentum)
+        trainable = tf.trainable_variables()
+        optim = optimizer.minimize(loss, var_list=trainable)
+        init = tf.initialize_all_variables()
+
+        generated_waveform = None
+        max_allowed_loss = 0.1
+        slide_windows = 256
+
+        with self.test_session() as sess:
+            for i in range(TRAIN_ITERATIONS):
+                length = min(len(audio), i + slide_windows)
+                input_audio_window = audio[i:length]
+                output_audio_window = output_audio[i:length]
+                loss_val, _ = sess.run([loss, optim], feed_dict={input_samples: input_audio_window,
+                                                                 output_samples: output_audio_window})
+                if i % 10 == 0:
+                    print("i: %d loss: %f" % (i, loss_val))
+            # saver.save(sess, '/tmp/sine_test_model.ckpt', global_step=i)
+            if self.generate:
+                # Check non-incremental generation
+                generated_waveform = generate_waveform(sess, self.net, False, wav_seed=True)
+                check_waveform(self.assertGreater, generated_waveform)
+
+                # Check incremental generation
+                # generated_waveform = generate_waveform(sess, self.net, True, wav_seed=True)
+                # plt.plot(generated_waveform)
+                # plt.show()
+                # check_waveform(self.assertGreater, generated_waveform)
+
+
 class TestNet(tf.test.TestCase):
     def setUp(self):
         self.net = WaveNetModel(batch_size=1,
@@ -191,9 +250,6 @@ class TestNet(tf.test.TestCase):
         np.random.seed(42)
         librosa.output.write_wav('sine_train.wav', audio, int(SAMPLE_RATE_HZ))
         librosa.output.write_wav('sine_expected_answered.wav', output_audio, int(SAMPLE_RATE_HZ))
-        # plt.plot(audio)
-        # plt.plot(output_audio)
-        # plt.show()
         # if self.generate:
         #
         #    power_spectrum = np.abs(np.fft.fft(audio))**2
