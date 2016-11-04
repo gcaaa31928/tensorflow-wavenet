@@ -191,8 +191,7 @@ class TestMoveNet(tf.test.TestCase):
         slide_windows = 256
         for slide_start in range(0, len(input_waveform), slide_windows):
             if slide_start + slide_windows >= len(input_waveform):
-                slide_start = 0
-                print("slide from beginning...")
+                break
             input_audio_window = input_waveform[slide_start:slide_start + slide_windows]
 
             # Run the WaveNet to predict the next sample.

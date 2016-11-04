@@ -12,7 +12,7 @@ import tensorflow as tf
 
 from wavenet import WaveNetModel, mu_law_decode, mu_law_encode, audio_reader
 
-SAMPLES = 16000
+SAMPLES = 1000
 TEMPERATURE = 1.0
 LOGDIR = './logdir'
 WINDOW = 5000
@@ -53,13 +53,13 @@ def get_arguments():
         type=str,
         default=LOGDIR,
         help='Directory in which to store the logging '
-        'information for TensorBoard.')
+             'information for TensorBoard.')
     parser.add_argument(
         '--window',
         type=int,
         default=WINDOW,
         help='The number of past samples to take into '
-        'account at each step')
+             'account at each step')
     parser.add_argument(
         '--wavenet_params',
         type=str,
@@ -88,6 +88,15 @@ def get_arguments():
     return parser.parse_args()
 
 
+def get_all_output_from_predictions(predictions, quantization_channels):
+    samples = []
+    for predit in predictions:
+        sample = np.random.choice(
+            np.arange(quantization_channels), p=predit)
+        samples.append(sample)
+    return samples
+
+
 def write_wav(waveform, sample_rate, filename):
     y = np.array(waveform)
     librosa.output.write_wav(filename, y, sample_rate)
@@ -104,8 +113,8 @@ def create_seed(filename,
 
     quantized = mu_law_encode(audio, quantization_channels)
     cut_index = tf.cond(tf.size(quantized) < tf.constant(window_size),
-            lambda: tf.size(quantized),
-            lambda: tf.constant(window_size))
+                        lambda: tf.size(quantized),
+                        lambda: tf.constant(window_size))
 
     return quantized[:cut_index]
 
@@ -133,14 +142,11 @@ def main():
 
     samples = tf.placeholder(tf.int32)
 
-    if args.fast_generation:
-        next_sample = net.predict_proba_incremental(samples)
-    else:
-        next_sample = net.predict_proba(samples)
+    next_sample = net.predict_proba_all(samples)
 
-    if args.fast_generation:
-        sess.run(tf.initialize_all_variables())
-        sess.run(net.init_ops)
+    # if args.fast_generation:
+    #     sess.run(tf.initialize_all_variables())
+    #     sess.run(net.init_ops)
 
     variables_to_restore = {
         var.name[:-2]: var for var in tf.all_variables()
@@ -153,85 +159,41 @@ def main():
     decode = mu_law_decode(samples, wavenet_params['quantization_channels'])
 
     quantization_channels = wavenet_params['quantization_channels']
-    if args.wav_seed:
-        seed = create_seed(args.wav_seed,
-                           wavenet_params['sample_rate'],
-                           quantization_channels,
-                           window_size=16000)
-        input_waveform = sess.run(seed).tolist()
-        waveform = []
-        print('waveform seed length from {}'.format(len(input_waveform)))
-    else:
-        waveform = np.random.randint(quantization_channels, size=(1,)).tolist()
-
-    if args.fast_generation and args.wav_seed:
-        # When using the incremental generation, we need to
-        # feed in all priming samples one by one before starting the
-        # actual generation.
-        # TODO This could be done much more efficiently by passing the waveform
-        # to the incremental generator as an optional argument, which would be
-        # used to fill the queues initially.
-        outputs = [next_sample]
-        outputs.extend(net.push_ops)
-
-        print('Priming generation...')
-        for i, x in enumerate(waveform[:-(args.window + 1)]):
-            if i % 100 == 0:
-                print('Priming sample {}'.format(i))
-            sess.run(outputs, feed_dict={samples: x})
-        print('Done.')
-
+    seed = create_seed(args.wav_seed,
+                       wavenet_params['sample_rate'],
+                       quantization_channels,
+                       window_size=17000)
+    input_waveform = sess.run(seed).tolist()
+    waveform = []
+    print('waveform seed length from {}'.format(len(input_waveform)))
+    print('samples {}'.format(args.samples))
     last_sample_timestamp = datetime.now()
-    for step in range(args.window, args.samples):
-        if args.fast_generation:
-            outputs = [next_sample]
-            outputs.extend(net.push_ops)
-            window = waveform[-1]
-        else:
-            if step - args.window >= 0:
-                window = input_waveform[step-args.window: step]
-            else:
-                window = input_waveform[0:step]
-            if len(window) == 0:
-                continue
-            # if len(waveform) > args.window:
-            #     window = waveform[-args.window:]
-            # else:
-            #     window = waveform
-            outputs = [next_sample]
+    for slide_start in range(0, len(input_waveform), args.samples):
+        if slide_start + args.samples >= len(input_waveform):
+            break
+        input_audio_window = input_waveform[slide_start:slide_start + args.samples]
 
+        outputs = [next_sample]
         # Run the WaveNet to predict the next sample.
-        prediction = sess.run(outputs, feed_dict={samples: window})[0]
-
-        # Scale prediction distribution using temperature.
-        np.seterr(divide='ignore')
-        scaled_prediction = np.log(prediction) / args.temperature
-        scaled_prediction = scaled_prediction - np.logaddexp.reduce(scaled_prediction)
-        scaled_prediction = np.exp(scaled_prediction)
-        np.seterr(divide='warn')
-
-        # Prediction distribution at temperature=1.0 should be unchanged after scaling.
-        if args.temperature == 1.0:
-            np.testing.assert_allclose(prediction, scaled_prediction, atol=1e-5, err_msg='Prediction scaling at temperature=1.0 is not working as intended.')
-
-        sample = np.random.choice(
-            np.arange(quantization_channels), p=scaled_prediction)
-        waveform.append(sample)
+        all_prediction = sess.run(outputs, feed_dict={samples: input_audio_window})[0]
+        all_prediction = np.asarray(all_prediction)
+        output_waveform = get_all_output_from_predictions(all_prediction, net.quantization_channels)
+        waveform.extend(output_waveform)
 
         # Show progress only once per second.
         current_sample_timestamp = datetime.now()
         time_since_print = current_sample_timestamp - last_sample_timestamp
         if time_since_print.total_seconds() > 1.:
-            print('Sample {:3<d}/{:3<d}'.format(step + 1, args.samples),
+            print('Sample {:3<d}/{:3<d}'.format(slide_start + 1, args.samples),
                   end='\r')
             last_sample_timestamp = current_sample_timestamp
 
         # If we have partial writing, save the result so far.
         if (args.wav_out_path and args.save_every and
-                (step + 1) % args.save_every == 0):
+                        (slide_start + 1) % args.save_every == 0):
             out = sess.run(decode, feed_dict={samples: waveform})
             write_wav(out, wavenet_params['sample_rate'], args.wav_out_path)
-            print("current step is {}".format(step))
+            print("current step is {}".format(slide_start))
 
     # Introduce a newline to clear the carriage return from the progress.
     print()
