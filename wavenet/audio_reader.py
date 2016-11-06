@@ -90,9 +90,9 @@ class AudioReader(object):
         output_buffer_ = np.array([])
         stop = False
         # Go through the dataset multiple times
-        iterator = load_generic_audio(self.audio_dir, self.sample_rate)
-        output_iterator = load_generic_audio(self.audio_output_dir, self.sample_rate)
         while not stop:
+            iterator = load_generic_audio(self.audio_dir, self.sample_rate)
+            output_iterator = load_generic_audio(self.audio_output_dir, self.sample_rate)
             for (audio, filename), (output_audio, output_filename) in zip(iterator, output_iterator):
                 if self.coord.should_stop():
                     stop = True
