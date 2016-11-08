@@ -60,7 +60,9 @@ class AudioReader(object):
                  sample_rate,
                  sample_size=None,
                  silence_threshold=None,
-                 queue_size=256):
+                 queue_size=256,
+                 step_length=10):
+        self.step_length = step_length
         self.audio_dir = audio_dir
         self.audio_output_dir = audio_output_dir
         self.sample_rate = sample_rate
@@ -120,8 +122,8 @@ class AudioReader(object):
                         output_piece = np.reshape(output_buffer_[:self.sample_size], [-1, 1])
                         sess.run(self.enqueue,
                                  feed_dict={self.sample_placeholder: piece, self.output_placeholder: output_piece})
-                        buffer_ = buffer_[1:]
-                        output_buffer_ = output_buffer_[1:]
+                        buffer_ = buffer_[self.step_length:]
+                        output_buffer_ = output_buffer_[self.step_length:]
                 else:
                     sess.run(self.enqueue,
                              feed_dict={self.sample_placeholder: audio})
