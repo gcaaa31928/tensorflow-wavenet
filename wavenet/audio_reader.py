@@ -61,7 +61,7 @@ class AudioReader(object):
                  sample_size=None,
                  silence_threshold=None,
                  queue_size=256,
-                 step_length=10):
+                 step_length=100):
         self.step_length = step_length
         self.audio_dir = audio_dir
         self.audio_output_dir = audio_output_dir
@@ -76,7 +76,7 @@ class AudioReader(object):
                                          ['float32', 'float32'],
                                          shapes=[(None, 1), (None, 1)])
         self.enqueue = self.queue.enqueue([self.sample_placeholder, self.output_placeholder])
-
+        print("step is {}.".format(self.step_length))
         # TODO Find a better way to check this.
         # Checking inside the AudioReader's thread makes it hard to terminate
         # the execution of the script, so we do it in the constructor for now.
