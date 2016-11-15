@@ -17,6 +17,7 @@ import time
 import tensorflow as tf
 from tensorflow.python.client import timeline
 
+from generate import create_seed
 from wavenet import WaveNetModel, AudioReader, optimizer_factory
 
 BATCH_SIZE = 1
@@ -34,6 +35,8 @@ SILENCE_THRESHOLD = 0.3
 EPSILON = 0.001
 MOMENTUM = 0.9
 STEP_LENGTH = 100
+VALID_STEP = 5000
+
 
 
 def get_arguments():
@@ -185,6 +188,8 @@ def validate_directories(args):
 
 def main():
     args = get_arguments()
+    with open(args.wavenet_params, 'r') as config_file:
+        wavenet_params = json.load(config_file)
 
     try:
         directories = validate_directories(args)
@@ -304,6 +309,10 @@ def main():
             print('step {:d} - loss = {:.3f}, ({:.3f} sec/step)'
                   .format(step, loss_value, duration))
 
+            if step % VALID_STEP == 0:
+                pass
+
+
             if step % args.checkpoint_every == 0:
                 save(saver, sess, logdir, step)
                 last_saved_step = step
@@ -318,6 +327,17 @@ def main():
         coord.request_stop()
         coord.join(threads)
 
+
+def predict(net, sess, wavenet_params):
+    quantization_channels = wavenet_params['quantization_channels']
+    seed = create_seed('./input/input.wav',
+                       wavenet_params['sample_rate'],
+                       quantization_channels)
+    input_waveform = sess.run(seed).tolist()
+    samples = tf.placeholder(tf.int32)
+    predict_samples = net.predict_proba_all(samples)
+    all_prediction = sess.run([predict_samples], feed_dict={samples: input_waveform})[0]
+    
 
 if __name__ == '__main__':
     main()

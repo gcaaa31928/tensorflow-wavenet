@@ -260,8 +260,6 @@ class TestMoveNet(tf.test.TestCase):
                 check_waveform(self.assertGreater, generated_waveform)
 
 
-
-
 class TestNet(tf.test.TestCase):
     def setUp(self):
         self.net = WaveNetModel(batch_size=1,
