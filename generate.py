@@ -15,11 +15,12 @@ from wavenet import WaveNetModel, mu_law_decode, mu_law_encode, audio_reader
 SAMPLES = 1000
 TEMPERATURE = 1.0
 LOGDIR = './logdir'
-WINDOW = 5000
+WINDOW = int(1e9)
 WAVENET_PARAMS = './wavenet_params.json'
 SAVE_EVERY = 50
 SILENCE_THRESHOLD = 0.1
-
+STEP_LENGTH = 100
+OUTPUT_FILE='./output/output.wav'
 
 def get_arguments():
     def _str_to_bool(s):
@@ -85,6 +86,10 @@ def get_arguments():
         type=str,
         default=None,
         help='The wav file to start generation from')
+    parser.add_argument(
+        '--step_length',
+        type=int,
+        default=STEP_LENGTH)
     return parser.parse_args()
 
 
@@ -117,6 +122,15 @@ def create_seed(filename,
                         lambda: tf.constant(window_size))
 
     return quantized[:cut_index]
+
+
+def mse_with_output(waveform, filename, sample_rate):
+    audio, _ = librosa.load(filename, sr=sample_rate, mono=True)
+    min_len = min(len(waveform), len(audio))
+    waveform = waveform[:min_len]
+    audio = audio[:min_len]
+    error_array = np.square(np.subtract(waveform, audio))
+    return np.average(error_array)
 
 
 def main():
@@ -161,14 +175,13 @@ def main():
     quantization_channels = wavenet_params['quantization_channels']
     seed = create_seed(args.wav_seed,
                        wavenet_params['sample_rate'],
-                       quantization_channels,
-                       window_size=17000)
+                       quantization_channels)
     input_waveform = sess.run(seed).tolist()
     waveform = []
     print('waveform seed length from {}'.format(len(input_waveform)))
     print('samples {}'.format(args.samples))
     last_sample_timestamp = datetime.now()
-    for slide_start in range(0, len(input_waveform), args.samples):
+    for slide_start in range(0, len(input_waveform), args.step_length):
         if slide_start + args.samples >= len(input_waveform):
             break
         input_audio_window = input_waveform[slide_start:slide_start + args.samples]
@@ -178,7 +191,17 @@ def main():
         all_prediction = sess.run(outputs, feed_dict={samples: input_audio_window})[0]
         all_prediction = np.asarray(all_prediction)
         output_waveform = get_all_output_from_predictions(all_prediction, net.quantization_channels)
-        waveform.extend(output_waveform)
+
+        if len(waveform) > 0:
+            overlap_waveform = waveform[slide_start:len(waveform)]
+            output_overlap_waveform = output_waveform[:-args.step_length]
+            print(len(overlap_waveform), len(output_overlap_waveform), len(waveform))
+            result = np.divide(np.add(output_overlap_waveform, overlap_waveform), 2.0)
+            waveform[slide_start:len(waveform)] = result
+            waveform.extend(output_waveform[-args.step_length:])
+
+        else:
+            waveform = output_waveform
 
         # Show progress only once per second.
         current_sample_timestamp = datetime.now()
@@ -210,6 +233,7 @@ def main():
     # Save the result as a wav file.
     if args.wav_out_path:
         out = sess.run(decode, feed_dict={samples: waveform})
+        print("The error between expected and actual is {}".format(mse_with_output(out, OUTPUT_FILE, wavenet_params['sample_rate'])))
         write_wav(out, wavenet_params['sample_rate'], args.wav_out_path)
 
     print('Finished generating. The result can be viewed in TensorBoard.')

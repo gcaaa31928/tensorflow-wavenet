@@ -24,7 +24,7 @@ DATA_DIRECTORY = './input'
 OUT_DATA_DIRECTORY = './output'
 LOGDIR_ROOT = './logdir'
 CHECKPOINT_EVERY = 2000
-NUM_STEPS = int(1e5)
+NUM_STEPS = int(32050)
 LEARNING_RATE = 1e-3
 WAVENET_PARAMS = './wavenet_params.json'
 STARTED_DATESTRING = "{0:%Y-%m-%dT%H-%M-%S}".format(datetime.now())
@@ -33,6 +33,7 @@ L2_REGULARIZATION_STRENGTH = 0
 SILENCE_THRESHOLD = 0.3
 EPSILON = 0.001
 MOMENTUM = 0.9
+STEP_LENGTH = 100
 
 
 def get_arguments():
@@ -42,7 +43,6 @@ def get_arguments():
             raise ValueError('Argument needs to be a '
                              'boolean, got {}'.format(s))
         return {'true': True, 'false': False}[s.lower()]
-
 
     parser = argparse.ArgumentParser(description='WaveNet example network')
     parser.add_argument('--batch_size', type=int, default=BATCH_SIZE,
@@ -97,7 +97,9 @@ def get_arguments():
                         default=MOMENTUM, help='Specify the momentum to be '
                         'used by sgd or rmsprop optimizer. Ignored by the '
                         'adam optimizer.')
-    parser.add_argument('--histograms', type=_str_to_bool, default=True,
+    parser.add_argument('--step_length', type=float,
+                        default=STEP_LENGTH)
+    parser.add_argument('--histograms', type=_str_to_bool, default=False,
                          help='Whether to store histogram summaries.')
     return parser.parse_args()
 
@@ -217,7 +219,8 @@ def main():
             coord,
             sample_rate=wavenet_params['sample_rate'],
             sample_size=args.sample_size,
-            silence_threshold=args.silence_threshold)
+            silence_threshold=args.silence_threshold,
+            step_length=args.step_length)
         audio_batch = reader.dequeue(args.batch_size)
 
     # Create network.
