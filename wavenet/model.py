@@ -502,7 +502,7 @@ class WaveNetModel(object):
             output_encoded = self._one_hot(output_batch)
             if self.scalar_input:
                 network_input = tf.reshape(
-                    tf.cast(input_batch, tf.float64),
+                    tf.cast(input_batch, tf.float32),
                     [self.batch_size, -1, 1])
             else:
                 network_input = encoded
