@@ -18,7 +18,7 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.python.client import timeline
 
-from generate import create_seed
+from generate import create_seed, write_wav
 from generate import get_all_output_from_predictions
 
 from wavenet import WaveNetModel, AudioReader, optimizer_factory
@@ -29,7 +29,7 @@ DATA_DIRECTORY = './input'
 OUT_DATA_DIRECTORY = './output'
 LOGDIR_ROOT = './logdir'
 CHECKPOINT_EVERY = 2000
-NUM_STEPS = int(32050)
+NUM_STEPS = int(1e9)
 LEARNING_RATE = 1e-3
 WAVENET_PARAMS = './wavenet_params.json'
 STARTED_DATESTRING = "{0:%Y-%m-%dT%H-%M-%S}".format(datetime.now())
@@ -320,11 +320,14 @@ def main():
                                              wavenet_params['quantization_channels'])
                 expected_waveform = create_seed(VALID_DIR + '/output.wav', wavenet_params['sample_rate'],
                                                 wavenet_params['quantization_channels'])
-                if current_predict_step + args.sample_size >= len(
-                        input_waveform) or current_predict_step + args.sample_size >= len(expected_waveform):
+                input_waveform = sess.run(input_waveform).tolist()
+                expected_waveform = sess.run(expected_waveform).tolist()
+                if current_predict_step + args.sample_size >= len(input_waveform) or \
+                                        current_predict_step + args.sample_size >= len(expected_waveform):
                     current_predict_step = 0
 
-                predict_error = predict(net, sess, wavenet_params['quantization_channels'], input_waveform, expected_waveform)
+                predict_error = predict(net, sess, wavenet_params, input_waveform,
+                                        expected_waveform)
                 print("predict error is {:.3f}".format(predict_error))
                 current_predict_step += args.sample_size
 
@@ -343,10 +346,10 @@ def main():
         coord.join(threads)
 
 
-def predict(net, sess, quantization_channels, input_waveform, expected_waveform):
+def predict(net, sess, wavenet_params, input_waveform, expected_waveform):
     samples = tf.placeholder(tf.int32)
     predict_samples = net.predict_proba_all(samples)
-    decode = mu_law_decode(samples, quantization_channels)
+    decode = mu_law_decode(samples, net.quantization_channels)
     all_prediction = sess.run([predict_samples], feed_dict={samples: input_waveform})[0]
     all_prediction = np.asarray(all_prediction)
     output = get_all_output_from_predictions(all_prediction, net.quantization_channels)
