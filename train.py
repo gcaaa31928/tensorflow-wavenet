@@ -15,10 +15,14 @@ import sys
 import time
 
 import tensorflow as tf
+import numpy as np
 from tensorflow.python.client import timeline
 
 from generate import create_seed
+from generate import get_all_output_from_predictions
+
 from wavenet import WaveNetModel, AudioReader, optimizer_factory
+from wavenet import mu_law_decode
 
 BATCH_SIZE = 1
 DATA_DIRECTORY = './input'
@@ -36,7 +40,7 @@ EPSILON = 0.001
 MOMENTUM = 0.9
 STEP_LENGTH = 100
 VALID_STEP = 5000
-
+TRAIN_SET_DATA_RATIO = 0.9
 
 
 def get_arguments():
@@ -310,8 +314,7 @@ def main():
                   .format(step, loss_value, duration))
 
             if step % VALID_STEP == 0:
-                pass
-
+                predict(net, sess, wavenet_params)
 
             if step % args.checkpoint_every == 0:
                 save(saver, sess, logdir, step)
@@ -328,16 +331,21 @@ def main():
         coord.join(threads)
 
 
-def predict(net, sess, wavenet_params):
+def predict(net, sess, wavenet_params, input_waveform, output_waveform):
     quantization_channels = wavenet_params['quantization_channels']
-    seed = create_seed('./input/input.wav',
-                       wavenet_params['sample_rate'],
-                       quantization_channels)
-    input_waveform = sess.run(seed).tolist()
     samples = tf.placeholder(tf.int32)
     predict_samples = net.predict_proba_all(samples)
+    decode = mu_law_decode(samples, wavenet_params['quantization_channels'])
     all_prediction = sess.run([predict_samples], feed_dict={samples: input_waveform})[0]
-    
+    all_prediction = np.asarray(all_prediction)
+    output = get_all_output_from_predictions(all_prediction, net.quantization_channels)
+    out = sess.run(decode, feed_dict={samples: output})
+    return mean_square_error(out, output_waveform)
+
+
+def mean_square_error(input_array, output_array):
+    error_array = np.square(np.subtract(input_array, output_array))
+    return np.average(error_array)
 
 if __name__ == '__main__':
     main()
