@@ -39,8 +39,9 @@ SILENCE_THRESHOLD = 0.3
 EPSILON = 0.001
 MOMENTUM = 0.9
 STEP_LENGTH = 100
-VALID_STEP = 5000
+VALID_STEP = 1
 TRAIN_SET_DATA_RATIO = 0.9
+VALID_DIR = './validate'
 
 
 def get_arguments():
@@ -60,24 +61,24 @@ def get_arguments():
                         help='output data')
     parser.add_argument('--store_metadata', type=bool, default=False,
                         help='Whether to store advanced debugging information '
-                        '(execution time, memory consumption) for use with '
-                        'TensorBoard.')
+                             '(execution time, memory consumption) for use with '
+                             'TensorBoard.')
     parser.add_argument('--logdir', type=str, default=None,
                         help='Directory in which to store the logging '
-                        'information for TensorBoard. '
-                        'If the model already exists, it will restore '
-                        'the state and will continue training. '
-                        'Cannot use with --logdir_root and --restore_from.')
+                             'information for TensorBoard. '
+                             'If the model already exists, it will restore '
+                             'the state and will continue training. '
+                             'Cannot use with --logdir_root and --restore_from.')
     parser.add_argument('--logdir_root', type=str, default=None,
                         help='Root directory to place the logging '
-                        'output and generated model. These are stored '
-                        'under the dated subdirectory of --logdir_root. '
-                        'Cannot use with --logdir.')
+                             'output and generated model. These are stored '
+                             'under the dated subdirectory of --logdir_root. '
+                             'Cannot use with --logdir.')
     parser.add_argument('--restore_from', type=str, default=None,
                         help='Directory in which to restore the model from. '
-                        'This creates the new model under the dated directory '
-                        'in --logdir_root. '
-                        'Cannot use with --logdir.')
+                             'This creates the new model under the dated directory '
+                             'in --logdir_root. '
+                             'Cannot use with --logdir.')
     parser.add_argument('--checkpoint_every', type=int, default=CHECKPOINT_EVERY,
                         help='How many steps to save each checkpoint after')
     parser.add_argument('--num_steps', type=int, default=NUM_STEPS,
@@ -88,26 +89,26 @@ def get_arguments():
                         help='JSON file with the network parameters.')
     parser.add_argument('--sample_size', type=int, default=SAMPLE_SIZE,
                         help='Concatenate and cut audio samples to this many '
-                        'samples.')
+                             'samples.')
     parser.add_argument('--l2_regularization_strength', type=float,
                         default=L2_REGULARIZATION_STRENGTH,
                         help='Coefficient in the L2 regularization. '
-                        'Disabled by default')
+                             'Disabled by default')
     parser.add_argument('--silence_threshold', type=float,
                         default=SILENCE_THRESHOLD,
                         help='Volume threshold below which to trim the start '
-                        'and the end from the training set samples.')
+                             'and the end from the training set samples.')
     parser.add_argument('--optimizer', type=str, default='adam',
                         choices=optimizer_factory.keys(),
                         help='Select the optimizer specified by this option.')
     parser.add_argument('--momentum', type=float,
                         default=MOMENTUM, help='Specify the momentum to be '
-                        'used by sgd or rmsprop optimizer. Ignored by the '
-                        'adam optimizer.')
+                                               'used by sgd or rmsprop optimizer. Ignored by the '
+                                               'adam optimizer.')
     parser.add_argument('--step_length', type=float,
                         default=STEP_LENGTH)
     parser.add_argument('--histograms', type=_str_to_bool, default=False,
-                         help='Whether to store histogram summaries.')
+                        help='Whether to store histogram summaries.')
     return parser.parse_args()
 
 
@@ -249,8 +250,8 @@ def main():
         args.l2_regularization_strength = None
     loss = net.loss(audio_batch[0], audio_batch[1], args.l2_regularization_strength)
     optimizer = optimizer_factory[args.optimizer](
-                    learning_rate=args.learning_rate,
-                    momentum=args.momentum)
+        learning_rate=args.learning_rate,
+        momentum=args.momentum)
     trainable = tf.trainable_variables()
     optim = optimizer.minimize(loss, var_list=trainable)
 
@@ -285,6 +286,7 @@ def main():
     reader.start_threads(sess)
 
     step = None
+    current_predict_step = 0
     try:
         last_saved_step = saved_global_step
         for step in range(saved_global_step + 1, args.num_steps):
@@ -314,7 +316,17 @@ def main():
                   .format(step, loss_value, duration))
 
             if step % VALID_STEP == 0:
-                predict(net, sess, wavenet_params)
+                input_waveform = create_seed(VALID_DIR + '/input.wav', wavenet_params['sample_rate'],
+                                             wavenet_params['quantization_channels'])
+                expected_waveform = create_seed(VALID_DIR + '/output.wav', wavenet_params['sample_rate'],
+                                                wavenet_params['quantization_channels'])
+                if current_predict_step + args.sample_size >= len(
+                        input_waveform) or current_predict_step + args.sample_size >= len(expected_waveform):
+                    current_predict_step = 0
+
+                predict_error = predict(net, sess, wavenet_params['quantization_channels'], input_waveform, expected_waveform)
+                print("predict error is {:.3f}".format(predict_error))
+                current_predict_step += args.sample_size
 
             if step % args.checkpoint_every == 0:
                 save(saver, sess, logdir, step)
@@ -331,21 +343,21 @@ def main():
         coord.join(threads)
 
 
-def predict(net, sess, wavenet_params, input_waveform, output_waveform):
-    quantization_channels = wavenet_params['quantization_channels']
+def predict(net, sess, quantization_channels, input_waveform, expected_waveform):
     samples = tf.placeholder(tf.int32)
     predict_samples = net.predict_proba_all(samples)
-    decode = mu_law_decode(samples, wavenet_params['quantization_channels'])
+    decode = mu_law_decode(samples, quantization_channels)
     all_prediction = sess.run([predict_samples], feed_dict={samples: input_waveform})[0]
     all_prediction = np.asarray(all_prediction)
     output = get_all_output_from_predictions(all_prediction, net.quantization_channels)
     out = sess.run(decode, feed_dict={samples: output})
-    return mean_square_error(out, output_waveform)
+    return mean_square_error(out, expected_waveform)
 
 
 def mean_square_error(input_array, output_array):
     error_array = np.square(np.subtract(input_array, output_array))
     return np.average(error_array)
+
 
 if __name__ == '__main__':
     main()
