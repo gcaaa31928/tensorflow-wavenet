@@ -532,16 +532,16 @@ class WaveNetModel(object):
                                         [-1, self.quantization_channels])
                 predict_result = tf.argmax(prediction, 1)
 
-                differentail_result = self.differential_result(predict_result)
+                differential_result = self.differential_result(predict_result)
 
                 loss = tf.nn.softmax_cross_entropy_with_logits(
                     prediction,
                     tf.reshape(output_encoded, [-1, self.quantization_channels]))
 
                 reduced_loss = tf.reduce_mean(loss)
-                reduced_loss = tf.mul(reduced_loss, differentail_result)
+                reduced_loss = tf.mul(reduced_loss, differential_result)
                 tf.scalar_summary('loss', reduced_loss)
-                tf.scalar_summary('differential', differentail_result)
+                tf.scalar_summary('differential', differential_result)
                 if l2_regularization_strength is None:
                     return reduced_loss
                 else:
