@@ -28,8 +28,8 @@ BATCH_SIZE = 1
 DATA_DIRECTORY = './input'
 OUT_DATA_DIRECTORY = './output'
 LOGDIR_ROOT = './logdir'
-CHECKPOINT_EVERY = 2000
-NUM_STEPS = int(1e9)
+CHECKPOINT_EVERY = 100
+NUM_STEPS = int(140000)
 LEARNING_RATE = 1e-3
 WAVENET_PARAMS = './wavenet_params.json'
 STARTED_DATESTRING = "{0:%Y-%m-%dT%H-%M-%S}".format(datetime.now())
@@ -42,6 +42,7 @@ STEP_LENGTH = 100
 VALID_STEP = 1
 TRAIN_SET_DATA_RATIO = 0.9
 VALID_DIR = './validate'
+VALID_OPEN = False
 
 
 def get_arguments():
@@ -315,7 +316,7 @@ def main():
             print('step {:d} - loss = {:.3f}, ({:.3f} sec/step)'
                   .format(step, loss_value, duration))
 
-            if step % VALID_STEP == 0:
+            if step % VALID_STEP == 0 and VALID_OPEN:
                 input_waveform = create_seed(VALID_DIR + '/input.wav', wavenet_params['sample_rate'],
                                              wavenet_params['quantization_channels'])
                 expected_waveform = create_seed(VALID_DIR + '/output.wav', wavenet_params['sample_rate'],

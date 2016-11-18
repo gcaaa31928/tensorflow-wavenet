@@ -6,7 +6,7 @@ from .ops import causal_conv, mu_law_encode
 def create_variable(name, shape):
     '''Create a convolution filter variable with the specified name and shape,
     and initialize it using Xavier initialition.'''
-    initializer = tf.contrib.layers.xavier_initializer_conv2d(seed=1)
+    initializer = tf.contrib.layers.xavier_initializer_conv2d()
     variable = tf.Variable(initializer(shape=shape), name=name)
     return variable
 
@@ -40,7 +40,7 @@ class WaveNetModel(object):
                  residual_channels,
                  dilation_channels,
                  skip_channels,
-                 quantization_channels=2**8,
+                 quantization_channels=2 ** 8,
                  use_biases=False,
                  scalar_input=False,
                  initial_filter_width=32,
@@ -355,13 +355,12 @@ class WaveNetModel(object):
         push_ops.append(push)
 
         current_layer = self._generator_causal_layer(
-                            current_layer, current_state)
+            current_layer, current_state)
 
         # Add all defined dilation layers.
         with tf.name_scope('dilated_stack'):
             for layer_index, dilation in enumerate(self.dilations):
                 with tf.name_scope('layer{}'.format(layer_index)):
-
                     q = tf.FIFOQueue(
                         dilation,
                         dtypes=tf.float32,
@@ -482,6 +481,15 @@ class WaveNetModel(object):
                 [1, self.quantization_channels])
             return tf.reshape(last, [-1])
 
+    def differential_result(self, input_batch):
+        shifted = tf.slice(input_batch, [1], [tf.shape(input_batch)[0] - 1])
+        no_shifted = tf.slice(input_batch, [0], [tf.shape(input_batch)[0] - 1])
+        sub = tf.sub(shifted, no_shifted)
+        res = tf.abs(sub)
+        res = tf.reduce_mean(res)
+        res = tf.add(res, 100)
+        return tf.mul(tf.cast(res, tf.float32), 0.01)
+
     def loss(self,
              input_batch,
              output_batch,
@@ -522,22 +530,25 @@ class WaveNetModel(object):
 
                 prediction = tf.reshape(raw_output,
                                         [-1, self.quantization_channels])
+                predict_result = tf.argmax(prediction, 1)
+
+                differentail_result = self.differential_result(predict_result)
 
                 loss = tf.nn.softmax_cross_entropy_with_logits(
                     prediction,
                     tf.reshape(output_encoded, [-1, self.quantization_channels]))
 
                 reduced_loss = tf.reduce_mean(loss)
-
+                reduced_loss = tf.mul(reduced_loss, differentail_result)
                 tf.scalar_summary('loss', reduced_loss)
-
+                tf.scalar_summary('differential', differentail_result)
                 if l2_regularization_strength is None:
                     return reduced_loss
                 else:
                     # L2 regularization for all trainable parameters
                     l2_loss = tf.add_n([tf.nn.l2_loss(v)
                                         for v in tf.trainable_variables()
-                                        if not('bias' in v.name)])
+                                        if not ('bias' in v.name)])
 
                     # Add the regularization term to the loss
                     total_loss = (reduced_loss +

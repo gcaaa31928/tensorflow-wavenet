@@ -58,21 +58,42 @@ class TestOwn(tf.test.TestCase):
         raw_output = self.net._create_network(encoded)
         prediction = tf.reshape(raw_output,
                                 [-1, self.net.quantization_channels])
+        proba = tf.cast(
+            tf.nn.softmax(tf.cast(prediction, tf.float64)), tf.float32)
+        argmax = tf.argmax(proba, 1)
+        shifted = tf.slice(argmax, [1], [tf.shape(argmax)[0] - 1])
+        no_shifted = tf.slice(argmax, [0], [tf.shape(argmax)[0] - 1])
+        sub = tf.sub(shifted, no_shifted)
+        res = tf.abs(sub)
+        res = tf.reduce_mean(res)
         loss = tf.nn.softmax_cross_entropy_with_logits(
             prediction,
             tf.reshape(output_encoded, [-1, self.net.quantization_channels]))
         with self.test_session() as sess:
             sess.run(tf.initialize_all_variables())
-            print(sess.run(loss))
+            print(sess.run(res))
+        # print(sess.run(proba)[2])
+        # print(sess.run(argmax))
 
     def test2(self):
         matrix = [[[1, 1, 1], [2, 2, 2], [3, 3, 3], [4, 4, 4], [5, 5, 5]]]
         shaped = tf.shape(matrix)
         sliced = tf.slice(matrix, [0, 1, 0], [-1, tf.shape(matrix)[1] - 1, -1])
         shifted = tf.pad(sliced, [[0, 0], [0, 1], [0, 0]])
+        # with self.test_session() as sess:
+        #     print(sess.run(shaped))
+        #     print(sess.run(shifted))
+
+    def test3(self):
+        array = [1., 3., 1., 2., 5.]
+        shifted = tf.slice(array, [1], [tf.shape(array)[0] - 1])
+        no_shifted = tf.slice(array, [0], [tf.shape(array)[0] - 1])
+        sub = tf.sub(shifted, no_shifted)
+        res = tf.abs(sub)
+        res = tf.reduce_mean(res)
+        res = tf.add(res, 1)
         with self.test_session() as sess:
-            print(sess.run(shaped))
-            print(sess.run(shifted))
+            print(sess.run(res))
 
 
 if __name__ == '__main__':
