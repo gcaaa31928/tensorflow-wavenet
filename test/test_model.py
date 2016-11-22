@@ -18,7 +18,7 @@ from wavenet import (WaveNetModel, time_to_batch, batch_to_time, causal_conv,
 from wavenet.model import create_variable
 
 SAMPLE_RATE_HZ = 2000.0  # Hz
-TRAIN_ITERATIONS = 6000
+TRAIN_ITERATIONS = 12600
 SAMPLE_DURATION = 0.5  # Seconds
 SAMPLE_PERIOD_SECS = 1.0 / SAMPLE_RATE_HZ
 MOMENTUM = 0.95
@@ -26,20 +26,20 @@ MOMENTUM_SCALAR_INPUT = 0.9
 GENERATE_SAMPLES = 1000
 QUANTIZATION_CHANNELS = 256
 WINDOW_SIZE = 1000
-T1 = 950.00  # E-flat frequency in hz
-T2 = 1650.00  # G frequency in hz
-T3 = 2450.00  # B-flat frequency in hz
-A1 = 1000.00  # D#4/Eb4
+T1 = 300.00  # E-flat frequency in hz
+T2 = 600.00  # G frequency in hz
+T3 = 900.00  # B-flat frequency in hz
+A1 = 600.00  # D#4/Eb4
 
-T4 = 250.00  # E-flat frequency in hz
-T5 = 750.00  # G frequency in hz
-T6 = 1750.00  # B-flat frequency in hz
-A2 = 750.00  # D#4/Eb4
+T4 = 900.00  # E-flat frequency in hz
+T5 = 1200.00  # G frequency in hz
+T6 = 1500.00  # B-flat frequency in hz
+A2 = 1200.00  # D#4/Eb4
 
-V1 = 500.00  # E-flat frequency in hz
-V2 = 1000.00  # G frequency in hz
-V3 = 2000.00  # B-flat frequency in hz
-VA = 1000.01
+V1 = 600.00  # E-flat frequency in hz
+V2 = 900.00  # G frequency in hz
+V3 = 1200.00  # B-flat frequency in hz
+VA = 900.00
 
 
 def make_sine_waves(option=0, validate=False):
@@ -236,15 +236,20 @@ class TestMoveNet(tf.test.TestCase):
         self.generate = True
         self.momentum = MOMENTUM
 
+    def change_file(self, file_step):
+        if file_step % 2 == 0:
+            return self.audio, self.output_audio
+        return self.audio2, self.output_audio2
+
     def testEndToEndTraining(self):
-        audio, output_audio = make_sine_waves()
-        audio2, output_audio2 = make_sine_waves(option=1)
+        self.audio, self.output_audio = make_sine_waves()
+        self.audio2, self.output_audio2 = make_sine_waves(option=1)
         validate_input_audio, expected_output = make_sine_waves(validate=True)
-        audio = np.concatenate((audio, audio2))
-        output_audio = np.concatenate((output_audio, output_audio2))
         np.random.seed(42)
-        librosa.output.write_wav('sine_train.wav', audio, int(SAMPLE_RATE_HZ))
-        librosa.output.write_wav('sine_expected_answered.wav', output_audio, int(SAMPLE_RATE_HZ))
+        librosa.output.write_wav('sine_input.wav', self.audio, int(SAMPLE_RATE_HZ))
+        librosa.output.write_wav('sine_output.wav', self.output_audio, int(SAMPLE_RATE_HZ))
+        librosa.output.write_wav('sine_input2.wav', self.audio2, int(SAMPLE_RATE_HZ))
+        librosa.output.write_wav('sine_output2.wav', self.output_audio2, int(SAMPLE_RATE_HZ))
         librosa.output.write_wav('sine_validate.wav', validate_input_audio, int(SAMPLE_RATE_HZ))
         librosa.output.write_wav('sine_expected_validate.wav', expected_output, int(SAMPLE_RATE_HZ))
 
@@ -262,15 +267,19 @@ class TestMoveNet(tf.test.TestCase):
         max_allowed_loss = 0.1
         slide_windows = 256
         slide_start = 0
+        file_step = 0
+        current_input_audio, current_output_audio = self.change_file(file_step)
         with self.test_session() as sess:
             sess.run(init)
             for i in range(TRAIN_ITERATIONS):
-                if slide_start + slide_windows >= min(len(audio), len(output_audio)):
+                if slide_start + slide_windows >= min(len(current_input_audio), len(current_output_audio)):
                     slide_start = 0
+                    file_step += 1
+                    current_input_audio, current_output_audio = self.change_file(file_step)
                     print("slide from beginning...")
-                input_audio_window = audio[slide_start:slide_start + slide_windows]
-                output_audio_window = output_audio[slide_start:slide_start + slide_windows]
-                slide_start += 10
+                input_audio_window = current_input_audio[slide_start:slide_start + slide_windows]
+                output_audio_window = current_output_audio[slide_start:slide_start + slide_windows]
+                slide_start += 1
                 loss_val, _ = sess.run([loss, optim], feed_dict={input_samples: input_audio_window,
                                                                  output_samples: output_audio_window})
                 if i % 10 == 0:
