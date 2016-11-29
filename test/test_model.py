@@ -17,6 +17,7 @@ from wavenet import (WaveNetModel, time_to_batch, batch_to_time, causal_conv,
                      optimizer_factory, mu_law_decode)
 from wavenet.model import create_variable
 
+
 SAMPLE_RATE_HZ = 16000.0  # Hz
 TRAIN_ITERATIONS = 32000
 SAMPLE_DURATION = 0.5  # Seconds
@@ -40,6 +41,7 @@ V1 = 500.00  # E-flat frequency in hz
 V2 = 1000.00  # G frequency in hz
 V3 = 2000.00  # B-flat frequency in hz
 VA = 1000.00
+
 
 
 def make_sine_waves(option=0, validate=False):
@@ -246,12 +248,12 @@ class TestMoveNet(tf.test.TestCase):
         self.audio2, self.output_audio2 = make_sine_waves(option=1)
         validate_input_audio, expected_output = make_sine_waves(validate=True)
         np.random.seed(42)
-        librosa.output.write_wav('sine_input.wav', self.audio, int(SAMPLE_RATE_HZ))
-        librosa.output.write_wav('sine_output.wav', self.output_audio, int(SAMPLE_RATE_HZ))
-        librosa.output.write_wav('sine_input2.wav', self.audio2, int(SAMPLE_RATE_HZ))
-        librosa.output.write_wav('sine_output2.wav', self.output_audio2, int(SAMPLE_RATE_HZ))
-        librosa.output.write_wav('sine_validate.wav', validate_input_audio, int(SAMPLE_RATE_HZ))
-        librosa.output.write_wav('sine_expected_validate.wav', expected_output, int(SAMPLE_RATE_HZ))
+        librosa.output.write_wav('sine_input.wav', self.audio, int(SAMPLE_RATE_HZ), norm=False)
+        librosa.output.write_wav('sine_output.wav', self.output_audio, int(SAMPLE_RATE_HZ), norm=False)
+        librosa.output.write_wav('sine_input2.wav', self.audio2, int(SAMPLE_RATE_HZ), norm=False)
+        librosa.output.write_wav('sine_output2.wav', self.output_audio2, int(SAMPLE_RATE_HZ), norm=False)
+        librosa.output.write_wav('sine_validate.wav', validate_input_audio, int(SAMPLE_RATE_HZ), norm=False)
+        librosa.output.write_wav('sine_expected_validate.wav', expected_output, int(SAMPLE_RATE_HZ), norm=False)
 
         input_samples = tf.placeholder(tf.float32)
         output_samples = tf.placeholder(tf.float32)
@@ -279,10 +281,10 @@ class TestMoveNet(tf.test.TestCase):
                     print("slide from beginning...")
                 input_audio_window = current_input_audio[slide_start:slide_start + slide_windows]
                 output_audio_window = current_output_audio[slide_start:slide_start + slide_windows]
-                slide_start += 1
+                slide_start += 40
                 loss_val, _ = sess.run([loss, optim], feed_dict={input_samples: input_audio_window,
                                                                  output_samples: output_audio_window})
-                if i % 10 == 0:
+                if i % 20 == 0:
                     print("i: %d loss: %f" % (i, loss_val))
             # saver.save(sess, '/tmp/sine_test_model.ckpt', global_step=i)
             if self.generate:

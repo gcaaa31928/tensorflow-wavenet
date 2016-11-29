@@ -539,7 +539,7 @@ class WaveNetModel(object):
                     tf.reshape(output_encoded, [-1, self.quantization_channels]))
 
                 reduced_loss = tf.reduce_mean(loss)
-                reduced_loss = tf.mul(reduced_loss, differential_result)
+                # reduced_loss = tf.mul(reduced_loss, differential_result)
                 tf.scalar_summary('loss', reduced_loss)
                 tf.scalar_summary('differential', differential_result)
                 if l2_regularization_strength is None:
