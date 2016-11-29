@@ -17,29 +17,29 @@ from wavenet import (WaveNetModel, time_to_batch, batch_to_time, causal_conv,
                      optimizer_factory, mu_law_decode)
 from wavenet.model import create_variable
 
-SAMPLE_RATE_HZ = 2000.0  # Hz
-TRAIN_ITERATIONS = 12600
+SAMPLE_RATE_HZ = 16000.0  # Hz
+TRAIN_ITERATIONS = 32000
 SAMPLE_DURATION = 0.5  # Seconds
 SAMPLE_PERIOD_SECS = 1.0 / SAMPLE_RATE_HZ
 MOMENTUM = 0.95
 MOMENTUM_SCALAR_INPUT = 0.9
 GENERATE_SAMPLES = 1000
 QUANTIZATION_CHANNELS = 256
-WINDOW_SIZE = 1000
-T1 = 300.00  # E-flat frequency in hz
-T2 = 600.00  # G frequency in hz
-T3 = 900.00  # B-flat frequency in hz
-A1 = 600.00  # D#4/Eb4
+WINDOW_SIZE = 10000
+T1 = 550.00  # E-flat frequency in hz
+T2 = 1050.00  # G frequency in hz
+T3 = 2050.00  # B-flat frequency in hz
+A1 = 1050.00  # D#4/Eb4
 
-T4 = 900.00  # E-flat frequency in hz
-T5 = 1200.00  # G frequency in hz
-T6 = 1500.00  # B-flat frequency in hz
-A2 = 1200.00  # D#4/Eb4
+T4 = 450.00  # E-flat frequency in hz
+T5 = 950.00  # G frequency in hz
+T6 = 1950.00  # B-flat frequency in hz
+A2 = 950.00  # D#4/Eb4
 
-V1 = 600.00  # E-flat frequency in hz
-V2 = 900.00  # G frequency in hz
-V3 = 1200.00  # B-flat frequency in hz
-VA = 900.00
+V1 = 500.00  # E-flat frequency in hz
+V2 = 1000.00  # G frequency in hz
+V3 = 2000.00  # B-flat frequency in hz
+VA = 1000.00
 
 
 def make_sine_waves(option=0, validate=False):
@@ -214,7 +214,7 @@ class TestMoveNet(tf.test.TestCase):
             all_prediction = sess.run(operations, feed_dict={samples: input_audio_window})[0]
             all_prediction = np.asarray(all_prediction)
             output_waveform = get_all_output_from_predictions(all_prediction)
-            print("Prediction {}".format(output_waveform))
+            # print("Prediction {}".format(output_waveform))
             waveform.extend(output_waveform)
 
         waveform = np.array(waveform[:])
